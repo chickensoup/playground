@@ -7,20 +7,8 @@ import pdb, time
 reload(sys)
 sys.setdefaultencoding('utf8')
 
-fproj = open('project_code_list.txt', 'r')
-lines = fproj.read().splitlines()
-lines.pop()
 
-start = 0
-if len(sys.argv) > 1:
-    start = int(sys.argv[1])
-
-if len(sys.argv) > 2:
-    end = int(sys.argv[2])
-else:
-    end = start + 50
-
-
+# get room information
 def process_room(room):
     room_url_prefix = 'http://fsfc.fsjw.gov.cn:8050/Templets/foshan/aspx/hpms/'
     room_url = room_url_prefix + room
@@ -41,7 +29,8 @@ def process_proj(pj, line):
     projurl = 'http://fsfc.fsjw.gov.cn:8050/Templets/foshan/aspx/hpms/ProjectDetailsInfo.aspx?' + str(line.strip())
     r1 = requests.get(projurl)
     soup = BeautifulSoup(r1.text, "html.parser")
-    
+
+    # get project information
     print 'Processing project ' + str(pj)
     f.write("项目链接:" + projurl + "\r\n")
     projdetail = "项目名称:" + soup.body.find(id='Project_XMMC').text + ";项目地址:" + soup.body.find(id='Project_XMDZ').text + ";开发商:" + soup.body.find(id='Project_KFQY_NAME').text + ";行政区划:" + soup.body.find(id='lblSZQY').text + ";总建筑面积:" + soup.body.find(id='Project_GHZJZMJ').text + ";容积率:" + soup.body.find(id='Project_RJL').text + ";资质证书编号:" + soup.body.find(id='lblZZZS').text + ";资质等级:" + soup.body.find(id='lblZZDJ').text + ";楼盘销售部地址:" + soup.body.find(id='Project_SLCDH').text
@@ -54,6 +43,7 @@ def process_proj(pj, line):
     f.write(projqt + "\r\n")
     f.flush()
 
+    # get presell information
     proj_presell = 'http://fsfc.fsjw.gov.cn:8050/Templets/FoShan/aspx/HPMS/GetQueryResult.ashx?type=0&P' + pcode + "&" + pdblx
     r2 = requests.get(proj_presell)
     soup2 = BeautifulSoup(r2.text, "html.parser")
@@ -82,6 +72,8 @@ def process_proj(pj, line):
         #presell_useage2 = "面积:" + presell_soup.body.find(id='lblZZMJ').text + ";" + presell_soup.body.find(id='lblSYMJ').text + ";" + presell_soup.body.find(id='lblQTMJ').text
         #f.write(presell_useage1 + "\r\n")
         #f.write(presell_useage2 + "\r\n")
+
+        # fill the validation parameter for the post request
         exe_url = 'http://fsfc.fsjw.gov.cn:8050/Common/Agents/ExeFunCommon.aspx'
         exe_validation_data = '%3C?xml%20version=%221.0%22%20encoding=%22utf-8%22%20standalone=%22yes%22?%3E%0A%3Cparam%20funname=%22SouthDigital.CMS.PubHelper.GetRoomWhere%22%3E%0A%3Citem%3Ecode=' + presell_dongid + '&amp;rsr=1001&amp;rse=0&amp;rhx=3001&amp;jzmj=&amp;tnmj=%3C/item%3E%0A%3C/param%3E%0A'
         response_validation = ""
@@ -93,8 +85,8 @@ def process_proj(pj, line):
                 print "retry response validation"
         exe_dong_data1 = '%3C?xml%20version=%221.0%22%20encoding=%22utf-8%22%20standalone=%22yes%22?%3E%0A%3Cparam%20funname=%22SouthDigital.CMS.CBuildTableEx_FS.GetPublicHTML%22%3E%0A%3Citem%3E' + presell_dongid + '%3C/item%3E%0A%3Citem%3E%20' + response_validation.strip() + '%3C/item%3E%0A%3Citem%3E%3C/item%3E%0A%3Citem%3E%3C/item%3E%0A%3Citem%3E1%3C/item%3E%0A%3C/param%3E%0A'
         exe_dong_data2 = '%3C?xml%20version=%221.0%22%20encoding=%22utf-8%22%20standalone=%22yes%22?%3E%0A%3Cparam%20funname=%22SouthDigital.CMS.CBuildTableEx_FS.GetPublicHTML%22%3E%0A%3Citem%3E' + presell_dongid + '%3C/item%3E%0A%3Citem%3E%20' + response_validation.strip() + '%3C/item%3E%0A%3Citem%3E%3C/item%3E%0A%3Citem%3E%3C/item%3E%0A%3Citem%3E2%3C/item%3E%0A%3C/param%3E%0A'
-        
-        
+
+        # be careful. The request body has some slight difference according to the dblx type
         if pdblx == 'dblx=1':
             exe_dong_data = exe_dong_data1
         elif pdblx == 'dblx=2':
@@ -103,6 +95,7 @@ def process_proj(pj, line):
         dong_soup = BeautifulSoup(requests.post(exe_url, exe_dong_data).text, "html.parser")
         rooms = str(dong_soup).split("href=\"")
 
+        # get room data
         if (len(rooms) > 1):
             rooms.pop(0)
             rooms_set = set()
@@ -137,8 +130,26 @@ def process_proj(pj, line):
     f.flush()
     f.close()
 
-for i in range(start, end):
-    t1 = time.time()
-    process_proj(i, lines[i])
-    t2 = time.time()
-    print "Process " + str(i) + " finished in " + str(t2-t1) + " seconds."
+
+fproj = open('project_code_list.txt', 'r')
+lines = fproj.read().splitlines()
+lines.pop()
+
+
+if __name__ == '__main__':
+    # read the parameters from console. The first parameter will be the start index of the project and the second will be the end.
+    # default start index is 0 and default end index is start index + 50
+    start = 0
+    if len(sys.argv) > 1:
+        start = int(sys.argv[1])
+
+    if len(sys.argv) > 2:
+        end = int(sys.argv[2])
+    else:
+        end = start + 50
+
+    for i in range(start, end):
+        t1 = time.time()
+        process_proj(i, lines[i])
+        t2 = time.time()
+        print "Process " + str(i) + " finished in " + str(t2-t1) + " seconds."
